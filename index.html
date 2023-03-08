@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Template HTML Diagram</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/mermaid@9.4.0/dist/mermaid.min.js"></script>
+    <script src="backup/mermaid.min.js"></script>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin> 
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <style>.mermaid { cursor: move; text-align: center; background-color: #f8f9fa; border-radius: 0.3rem; box-shadow: inset 0 0 26px 2px rgba(0,0,0,0.2) } h2,h3,h4,h5 { font-family: 'Pacifico'; width: 90vw; margin-top: 2rem; } .hash { background-color: #2ecc71; color: #fff; border-radius: 1rem; padding: .2rem .8rem; font-size: 0.8rem; } .alert { margin-bottom: 3rem !important; } ol a { text-decoration: none; }</style>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- <script src="backup/d3.v7.min.js"></script> -->
+</head>
+<body class="container pb-5">
+
+    <h1 class="mt-3">Table of Contents</h1>
+
+    <ol>
+        <li><a href="#sync">Synchronous approach</a></li>
+        <li><a href="#async">Asynchronous approach</a></li>
+    </ol>
+
+    <p class="w-50">This will compare the performance between the two approach</p>
+
+    <img class="rounded mb-5 w-50" src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0f/Queue_of_Players_Wait_for_Signing_20160430b.jpg/1200px-Queue_of_Players_Wait_for_Signing_20160430b.jpg?20160430224158" alt="cover">
+
+    <!-- Scenario 1 -->
+    <a name="sync"></a>
+    <h2>Synchronous</h2>
+
+    <span class="hash">More Wait</span>
+
+    <p class="w-50">Waits for everything then process it all together</p>
+
+    <pre class="mermaid">
+    sequenceDiagram
+        actor user as User
+        
+        box Group 1
+        participant controller as Controller
+        participant service as Service
+        end
+
+        box Group 2
+        participant data as Data
+        end
+        
+        box Group 3
+        participant other-service as Service
+        end
+
+        box Group 4
+        participant forever as Forever
+        end
+
+        box Group 5
+        participant output as Service
+        end
+
+        user ->>+ controller: Send Request
+
+        controller ->> service: Trigger Logic
+
+        service ->> data: Check available data
+
+        data -->> service: Give available data
+
+        loop For each data
+        service ->> other-service: Get other data available
+
+        other-service -->> service: Display "n" number of other data available
+
+        loop For each other data available
+            Note over service: Skip and validate other data
+            service ->> service: Convert to output
+            end
+        end
+
+        loop For each converted other data
+        service ->> output: Call other logic
+        output -->> service: other data saved to output
+        service ->> forever: Record transaction
+        forever -->> service: Recorded!
+        end
+
+        service -->> controller: Send result
+
+        controller -->>- user: Display result
+
+    </pre>
+
+    <p class="alert alert-danger w-50 m-auto">Longer response time to user and prone to timeouts as all the process needs to be completed before sending a response back to the user</p>
+    <!-- end of Scenario 1 -->
+
+
+
+
+
+
+
+
+
+
+
+    <!-- Scenario 2 -->
+    <a name="async"></a>
+    <h2>Asynchronous</h2>
+
+    <span class="hash">Less Wait</span>
+
+    <p class="w-50">As soon as each resources becomes available, process it</p>
+
+    <pre class="mermaid">
+        sequenceDiagram
+        actor user as User
+        
+        box Group 1
+        participant controller as Controller
+        participant listener-logic as Listener
+        participant service as Service
+        end
+
+        box Group 2
+        participant data as Data
+        end
+        
+        box Group 3
+        participant listener-other-service as Listener
+        participant other-service as Service
+        end
+
+        box Group 4
+        participant listener-forever as Listener
+        participant forever as Forever
+        end
+
+        box Group 5
+        participant listener-output as Listener
+        participant output as Service
+        end
+
+        user ->>+ controller: Send Request
+
+        par User to Controller
+            controller -->>- user: Response with Process started
+        and Controller to Service
+            controller -) service: Trigger Logic 
+        end
+
+        service ->> data: Check available data
+
+        data -->> service: Give available data
+
+        loop For each data
+
+            service ->> listener-other-service: Send "other-data.get" event
+            
+            par Checks each data in parallel
+                listener-other-service ->> other-service: Get other data available
+                other-service -->> listener-other-service: Display "n" number of other data available
+
+                loop For each other data available
+                    listener-other-service ->> listener-logic: Send "logical.other-data" event
+                end
+
+                Note over service: Skip and validate other data
+                
+                par Conversion happens in parallel with other other data available
+                    listener-logic ->> service: Convert to output
+                    service ->> listener-output: Send "output.post" event
+                    listener-output ->> output: Request POST
+                    output -->> listener-output: POST successful
+                    listener-output ->> listener-forever: Send "forever.post" event
+                    listener-forever -) forever: Record transaction
+                end
+            end
+        
+        end
+
+        user ->>+ controller: Get result
+
+        controller ->> service: Check result
+
+        service ->> forever: Query result
+
+        forever -->> service: Give query result
+
+        service -->> controller: Return result
+
+        controller -->>- user: Show result
+    </pre>
+
+    <p class="alert alert-info w-50 m-auto">Faster response times as the user will get an immediate response that there is a process on-going.</p>
+    <!-- end of Scenario 2 -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <script>
+        // init the mermaid
+        mermaid.initialize({ 
+            showSequenceNumbers: true,
+            themeVariables: {
+                fontFamily: '-apple-system, Segoe UI, Roboto, Arial'
+            }
+        })
+
+        // To enable pan & zoom
+        window.addEventListener('load', () => {
+            var svgs = d3.selectAll(".mermaid svg");
+            svgs.each(function () {
+                var svg = d3.select(this);
+                svg.html("<g>" + svg.html() + "</g>");
+                var inner = svg.select("g");
+                var zoom = d3.zoom().on("zoom", (event) => {
+                    inner.attr("transform", event.transform);
+                });
+                svg.call(zoom);
+            });
+        });
+    </script>
+</body>
+</html>
